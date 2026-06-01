@@ -7,6 +7,10 @@ final class ScannerViewModel: ObservableObject {
     @Published var isShowingScanner = false
     @Published var scannerErrorMessage: String?
 
+    init(documents: [ScannedDocument] = []) {
+        self.documents = documents
+    }
+
     var canScanDocuments: Bool {
         VNDocumentCameraViewController.isSupported
     }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ScanDetailView: View {
     let document: ScannedDocument
+    let shouldScrollToOCR: Bool
     var onRecognizedTextChanged: (String) -> Void
 
     @State private var recognizedText: String
@@ -13,23 +14,39 @@ struct ScanDetailView: View {
 
     init(
         document: ScannedDocument,
+        shouldScrollToOCR: Bool = false,
         onRecognizedTextChanged: @escaping (String) -> Void
     ) {
         self.document = document
+        self.shouldScrollToOCR = shouldScrollToOCR
         self.onRecognizedTextChanged = onRecognizedTextChanged
         _recognizedText = State(initialValue: document.recognizedText)
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
-                ForEach(Array(document.pages.enumerated()), id: \.offset) { index, image in
-                    pagePreview(index: index, image: image)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 20) {
+                    summarySection
+
+                    ForEach(Array(document.pages.enumerated()), id: \.offset) { index, image in
+                        pagePreview(index: index, image: image)
+                    }
+
+                    ocrSection
+                        .id("ocr-section")
+                }
+                .padding(.vertical)
+            }
+            .onAppear {
+                guard shouldScrollToOCR else {
+                    return
                 }
 
-                ocrSection
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    proxy.scrollTo("ocr-section", anchor: .top)
+                }
             }
-            .padding(.vertical)
         }
         .navigationTitle(document.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -38,6 +55,18 @@ struct ScanDetailView: View {
                 sharePDFButton
             }
         }
+    }
+
+    private var summarySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(document.pages.count) page\(document.pages.count == 1 ? "" : "s")")
+                .font(.headline)
+
+            Text("Created \(document.createdAt.formatted(date: .abbreviated, time: .shortened))")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal)
     }
 
     private func pagePreview(index: Int, image: UIImage) -> some View {

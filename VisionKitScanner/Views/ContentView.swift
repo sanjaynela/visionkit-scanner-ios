@@ -1,12 +1,34 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var viewModel = ScannerViewModel()
+    @StateObject private var viewModel: ScannerViewModel
+    private let shouldShowDemoDetail: Bool
+    private let shouldShowDemoOCR: Bool
+
+    init() {
+        let arguments = ProcessInfo.processInfo.arguments
+        let shouldLoadDemoData = arguments.contains("--demo-data")
+            || arguments.contains("--demo-detail")
+            || arguments.contains("--demo-ocr")
+        shouldShowDemoDetail = arguments.contains("--demo-detail")
+        shouldShowDemoOCR = arguments.contains("--demo-ocr")
+        _viewModel = StateObject(
+            wrappedValue: ScannerViewModel(documents: shouldLoadDemoData ? DemoData.documents : [])
+        )
+    }
 
     var body: some View {
         NavigationStack {
             Group {
-                if viewModel.documents.isEmpty {
+                if (shouldShowDemoDetail || shouldShowDemoOCR), let document = viewModel.documents.first {
+                    ScanDetailView(
+                        document: document,
+                        shouldScrollToOCR: shouldShowDemoOCR,
+                        onRecognizedTextChanged: { recognizedText in
+                            viewModel.updateRecognizedText(recognizedText, for: document)
+                        }
+                    )
+                } else if viewModel.documents.isEmpty {
                     emptyState
                 } else {
                     documentList
@@ -60,7 +82,7 @@ struct ContentView: View {
         ContentUnavailableView {
             Label("No Scans Yet", systemImage: "doc.viewfinder")
         } description: {
-            Text("Scan a document, preview its pages, run OCR, and export a PDF.")
+            Text("Scan a document, preview its pages, run OCR, and export a PDF from one place.")
         } actions: {
             Button {
                 viewModel.showScanner()
@@ -75,10 +97,29 @@ struct ContentView: View {
     private var documentList: some View {
         List {
             Section {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "lock.shield")
+                        .foregroundStyle(.blue)
+                        .frame(width: 28, height: 28)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Local-first scanner")
+                            .font(.subheadline.weight(.semibold))
+
+                        Text("Scans stay on the device unless you export and share a PDF.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
+            Section {
                 ForEach(viewModel.documents) { document in
                     NavigationLink {
                         ScanDetailView(
                             document: document,
+                            shouldScrollToOCR: false,
                             onRecognizedTextChanged: { recognizedText in
                                 viewModel.updateRecognizedText(recognizedText, for: document)
                             }
@@ -89,7 +130,7 @@ struct ContentView: View {
                 }
                 .onDelete(perform: viewModel.deleteDocuments)
             } footer: {
-                Text("Scans stay local unless you export and share them.")
+                Text("Swipe to delete a scan from this list.")
             }
         }
     }
@@ -117,6 +158,15 @@ private struct DocumentRow: View {
                 Text(document.createdAt.formatted(date: .abbreviated, time: .shortened))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if !document.recognizedText.isEmpty {
+                Image(systemName: "text.viewfinder")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("OCR complete")
             }
         }
         .padding(.vertical, 6)
